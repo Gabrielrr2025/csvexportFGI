@@ -14,7 +14,8 @@ CSV_FILE = "fear_greed.csv"
 def fetch_fgi_api() -> pd.DataFrame:
     """Baixa histórico completo da API alternative.me"""
     url = "https://api.alternative.me/fng/"
-    params = {"limit": 0, "format": "json", "date_format": "us"}
+    # Remove date_format para receber timestamp Unix (mais confiável)
+    params = {"limit": 0, "format": "json"}
     headers = {"User-Agent": "FGI-Exporter/1.0"}
 
     try:
@@ -36,12 +37,19 @@ def fetch_fgi_api() -> pd.DataFrame:
             val = d.get("value")
             if ts is None or val is None:
                 continue
+            
             try:
-                ts_int = int(ts)
-                day = datetime.utcfromtimestamp(ts_int).date()
+                # Tenta converter timestamp Unix (número inteiro)
+                try:
+                    ts_int = int(ts)
+                    day = datetime.utcfromtimestamp(ts_int).date()
+                except ValueError:
+                    # Se falhar, tenta parsear string no formato "MM-DD-YYYY"
+                    day = datetime.strptime(ts, "%m-%d-%Y").date()
+                
                 rows.append({"date": pd.to_datetime(day), "FGI": float(val)})
             except Exception as e:
-                print(f"⚠️ Erro ao processar linha: {e}")
+                print(f"⚠️ Erro ao processar linha (ts={ts}): {e}")
                 continue
 
         if not rows:
