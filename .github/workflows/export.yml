@@ -2,34 +2,67 @@ name: Update Fear & Greed CSV
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # roda todo dia às 03:00 UTC
-  workflow_dispatch:       # 👉 habilita o botão "Run workflow" manual no GitHub
+    - cron: "0 3 * * *"   # Roda todo dia às 03:00 UTC
+  workflow_dispatch:       # Habilita execução manual
+
+permissions:
+  contents: write  # Necessário para fazer push
 
 jobs:
-  build:
+  update-csv:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'  # Cache das dependências
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run exporter
+        id: export
         run: python export_fgi.py
+        continue-on-error: false  # Para o workflow se der erro
 
-      - name: List files (debug)
-        run: ls -lah
+      - name: Check CSV exists
+        run: |
+          if [ ! -f fear_greed.csv ]; then
+            echo "❌ ERRO: fear_greed.csv não foi gerado!"
+            exit 1
+          fi
+          echo "✅ CSV encontrado"
+          wc -l fear_greed.csv
 
-      - name: Commit CSV
+      - name: Commit and Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add fear_greed.csv || echo "⚠️ Arquivo não encontrado para adicionar"
-          git commit -m "chore: update fear_greed.csv" || echo "No changes to commit"
+          
+          # Adiciona apenas o CSV
+          git add fear_greed.csv
+          
+          # Verifica se há mudanças
+          if git diff --staged --quiet; then
+            echo "ℹ️ Nenhuma alteração no CSV (dados já atualizados)"
+            exit 0
+          fi
+          
+          # Commit com timestamp
+          git commit -m "chore: update fear_greed.csv ($(date -u '+%Y-%m-%d %H:%M UTC'))"
           git push
+
+      - name: Upload CSV as artifact (backup)
+        uses: actions/upload-artifact@v4
+        if: always()  # Sempre salva, mesmo se o commit falhar
+        with:
+          name: fear-greed-csv-${{ github.run_number }}
+          path: fear_greed.csv
+          retention-days: 30
