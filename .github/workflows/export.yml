@@ -1,13 +1,35 @@
+name: Update Fear & Greed CSV
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # roda todo dia às 03:00 UTC
+  workflow_dispatch:       # 👉 habilita o botão "Run workflow" manual no GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run exporter
+        run: python export_fgi.py
+
+      - name: List files (debug)
+        run: ls -lah
+
       - name: Commit CSV
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ -f "fear_greed.csv" ]; then
-            echo "✅ CSV encontrado, fazendo commit..."
-            git add fear_greed.csv
-            git commit -m "chore: update fear_greed.csv" || echo "No changes to commit"
-            git push
-          else
-            echo "⚠️ Nenhum CSV foi gerado"
-          fi
+          git add fear_greed.csv || echo "⚠️ Arquivo não encontrado para adicionar"
+          git commit -m "chore: update fear_greed.csv" || echo "No changes to commit"
+          git push
